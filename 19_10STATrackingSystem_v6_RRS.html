@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Grab Standard · STA prototype</title>
+<meta name="description" content="Concept prototype: the Rider Risk Score reads the danger, Safe Minutes absorb it. A student awards entry, not an official app.">
+<meta name="theme-color" content="#FFFFFF">
+<meta property="og:title" content="The Grab Standard · STA prototype">
+<meta property="og:description" content="Rider Risk Score reads the danger. Safe Minutes absorb it.">
+<meta name="format-detection" content="telephone=no">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='32' fill='%2300B14F'/%3E%3Ctext x='32' y='40' font-family='Arial,sans-serif' font-size='22' font-weight='900' fill='white' text-anchor='middle'%3ESTA%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
+<style>
+  /* Layout: phone-first, one screen. Mobile = the page IS the app (headline, engine strip, live app, control dock in one 100dvh column).
+     Desktop = story column left, the same app inside a device frame right. Single light theme by choice. */
+  :root{
+    --bg:#FFFFFF; --ink:#1F2629; --muted:#5D6970; --faint:#8A959B; --line:#E3E8EA;
+    --green:#00B14F; --green-ink:#00843B; --mint:#DDF4E8; --mint-2:#F0FAF5; --dark:#0A2E2B;
+    --amber-bg:#FFF2DB; --amber:#9A5500; --red:#D93F3F; --map:#EDF0EE;
+    --font:'Inter',-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --ease:cubic-bezier(.22,1,.36,1);
+    color-scheme:light;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+  html,body{background:#FFFFFF;}
+  .hero{padding-top:max(14px,env(safe-area-inset-top,0px));}
+  [hidden]{display:none!important;}
+  body{font-family:var(--font);background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;}
+  button{font-family:inherit;color:inherit;}
+  :focus-visible{outline:2px solid var(--green);outline-offset:2px;}
+
+  .app{display:flex;flex-direction:column;min-height:100dvh;
+    padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));}
+
+  /* ---------- hero ---------- */
+  .hero{padding-block:14px 10px;}
+  .eyebrow{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--green-ink);letter-spacing:.02em;}
+  .eyebrow .dot{width:20px;height:20px;border-radius:50%;background:var(--green);color:#fff;display:grid;place-items:center;font-size:8px;font-weight:900;}
+  .eyebrow .tag{margin-left:auto;font-size:11px;font-weight:600;color:var(--faint);}
+  h1{font-size:clamp(32px,9.4vw,60px);font-weight:900;letter-spacing:-.035em;line-height:1.02;margin-top:8px;}
+  .tagline{font-size:14px;color:var(--muted);margin-top:6px;line-height:1.4;}
+  .tagline b{color:var(--ink);font-weight:800;}
+  h1 em{font-style:normal;color:var(--green);}
+  .sub{display:none;}
+
+  /* ---------- engine strip: how STA works, live ---------- */
+  .engine{display:none;}
+  .eng{border:1.5px solid var(--line);border-radius:12px;padding:6px 9px;display:flex;flex-direction:column;gap:1px;transition:all .35s var(--ease);min-width:0;}
+  .eng .n{display:none;font-size:10px;font-weight:700;color:var(--faint);}
+  .eng b{font-size:12.5px;font-weight:800;line-height:1.2;}
+  .eng p{display:none;}
+  .eng.on{background:var(--green);border-color:var(--green);color:#fff;}
+  .eng.on .n{color:rgba(255,255,255,.8);}
+  .eng.pulse{animation:pulse .6s var(--ease);}
+  @keyframes pulse{50%{transform:scale(1.05);}}
+  .narr{display:none;font-size:14px;line-height:1.42;color:var(--ink);transition:opacity .2s;}
+  .hero{padding-bottom:12px;}
+  .narr b{color:var(--green-ink);font-weight:800;}
+
+  /* ---------- device (full-bleed on phone) ---------- */
+  .device{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden;
+    margin-left:calc(-1 * max(16px,env(safe-area-inset-left,0px)));margin-right:calc(-1 * max(16px,env(safe-area-inset-right,0px)));
+    border-top:1px solid var(--line);min-height:0;}
+  .map{position:relative;flex:1;min-height:150px;background:var(--map);overflow:hidden;}
+  .map svg.city{position:absolute;inset:0;width:100%;height:100%;}
+  .route-done{transition:stroke-dashoffset 1.4s var(--ease);}
+  .rider-pin{transition:transform 1.4s var(--ease),opacity .4s;}
+  .weather{position:absolute;inset:0;background:linear-gradient(180deg,rgba(60,82,106,.6),rgba(60,82,106,.3));opacity:0;transition:opacity .9s var(--ease);pointer-events:none;}
+  .map.rain .weather{opacity:1;}
+  .drop{position:absolute;top:-14px;width:1.5px;border-radius:2px;background:rgba(255,255,255,.75);animation:fall linear infinite;}
+  @keyframes fall{to{transform:translateY(420px);}}
+  .jam,.busy{opacity:0;transition:opacity .5s;}
+  .map.traffic .jam{opacity:1;} .map.busy-k .busy{opacity:1;}
+  .rrs{--hot:#00B14F;position:absolute;top:12px;left:12px;z-index:2;display:flex;align-items:center;gap:12px;background:#fff;border-radius:20px;padding:9px 16px 9px 9px;box-shadow:0 6px 18px -6px rgba(0,0,0,.28);transition:box-shadow .5s;}
+  .rrs.hot{box-shadow:0 0 0 3px var(--hot),0 10px 24px -8px rgba(0,0,0,.35);animation:hot 1.6s ease-in-out infinite;}
+  @keyframes hot{50%{box-shadow:0 0 0 7px color-mix(in srgb,var(--hot) 25%,transparent),0 10px 24px -8px rgba(0,0,0,.35);}}
+  .rrs .ring{position:relative;width:66px;height:66px;flex-shrink:0;}
+  .rrs svg{width:66px;height:66px;transform:rotate(-90deg);display:block;}
+  .rrs .rnum{position:absolute;inset:0;display:grid;place-items:center;font-size:24px;font-weight:900;letter-spacing:-.03em;font-variant-numeric:tabular-nums;color:var(--hot);transition:color .5s;}
+  .rrs .rt{font-size:10.5px;color:var(--muted);font-weight:800;letter-spacing:.08em;text-transform:uppercase;line-height:1.2;}
+  .rrs .rs{font-size:17px;font-weight:900;line-height:1.2;margin-top:2px;}
+  .rrs .rth{font-size:11px;color:var(--faint);font-weight:600;margin-top:2px;}
+
+  /* the bombastic beat: Safe Minutes land on the map */
+  .toast{position:absolute;left:50%;bottom:28px;z-index:3;transform:translate(-50%,24px) scale(.9);opacity:0;pointer-events:none;
+    background:var(--green);color:#fff;border-radius:18px;padding:12px 20px 12px;text-align:center;box-shadow:0 14px 30px -12px rgba(0,80,40,.55);transition:all .45s var(--ease);white-space:nowrap;}
+  .toast.show{opacity:1;transform:translate(-50%,0) scale(1);}
+  .toast .big{font-size:38px;font-weight:900;letter-spacing:-.03em;line-height:1;}
+  .toast .why{font-size:12px;font-weight:600;margin-top:5px;opacity:.95;}
+
+  .sheet{position:relative;margin-top:-16px;background:#fff;border-radius:18px 18px 0 0;padding:8px 16px 12px;z-index:2;box-shadow:0 -4px 14px -10px rgba(0,0,0,.25);}
+  .grabber{width:36px;height:4px;border-radius:9px;background:var(--line);margin:0 auto 10px;}
+  .vr{display:none;} .device.rider .vr{display:block;} .device.rider .vc{display:none;}
+  .eta-row{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;}
+  .eta-l{font-size:12.5px;color:var(--muted);font-weight:500;}
+  .eta{font-size:28px;font-weight:900;letter-spacing:-.03em;line-height:1.1;font-variant-numeric:tabular-nums;display:flex;align-items:baseline;gap:8px;}
+  .eta s{font-size:15px;font-weight:600;color:var(--faint);}
+  .eta-s{font-size:12px;color:var(--green-ink);font-weight:700;margin-top:2px;}
+  .sm{text-align:right;flex-shrink:0;}
+  .sm-n{font-size:40px;font-weight:900;color:var(--green);letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;}
+  .sm-n small{font-size:17px;color:var(--faint);font-weight:700;letter-spacing:0;}
+  .sm-n.pop{animation:smpop .7s var(--ease);}
+  @keyframes smpop{40%{transform:scale(1.25);}}
+  .sm-l{font-size:11.5px;color:var(--muted);font-weight:700;margin-top:3px;}
+  .who-chip{font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;background:var(--mint-2);color:var(--green-ink);white-space:nowrap;}
+  .device.rider .eta-s{font-size:12px;color:var(--green-ink);font-weight:700;margin-top:2px;}
+  .sm{text-align:right;flex-shrink:0;}
+  .sm-n{font-size:40px;font-weight:900;color:var(--green);letter-spacing:-.04em;line-height:1;font-variant-numeric:tabular-nums;}
+  .sm-n small{font-size:17px;color:var(--faint);font-weight:700;letter-spacing:0;}
+  .sm-n.pop{animation:smpop .7s var(--ease);}
+  @keyframes smpop{40%{transform:scale(1.25);}}
+  .sm-l{font-size:11.5px;color:var(--muted);font-weight:700;margin-top:3px;}
+  .who-chip{background:var(--dark);color:#fff;}
+  .buf{margin-top:8px;}
+  .buf-bar{height:5px;border-radius:9px;background:var(--map);overflow:hidden;}
+  .buf-fill{height:100%;width:0;background:var(--green);border-radius:9px;transition:width .9s var(--ease);}
+  .buf-t{font-size:12px;color:var(--muted);margin-top:5px;font-variant-numeric:tabular-nums;}
+  .buf-t b{color:var(--ink);}
+  .kept{margin-top:6px;font-size:12.5px;color:var(--green-ink);font-weight:700;}
+  .prog{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:12px;}
+  .seg{height:4px;border-radius:9px;background:var(--map);transition:background .6s;}
+  .seg.on{background:var(--green);}
+  .prog-l{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:5px;font-size:11px;color:var(--faint);font-weight:500;}
+  .prog-l .on{color:var(--ink);}
+  .status{display:grid;grid-template-columns:40px minmax(0,1fr);gap:11px;align-items:start;padding:11px 0 2px;margin-top:10px;border-top:1px solid var(--line);min-height:78px;}
+  .disc{width:40px;height:40px;border-radius:50%;background:var(--mint);display:grid;place-items:center;transition:background .3s;}
+  .st-top{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .st-l{font-size:15px;font-weight:800;}
+  .pill{font-size:11.5px;font-weight:800;background:var(--mint);color:var(--green-ink);padding:3px 9px;border-radius:999px;white-space:nowrap;opacity:0;transition:opacity .35s;}
+  .pill.show{opacity:1;}
+  .st-c{font-size:13.5px;line-height:1.42;color:var(--muted);margin-top:2px;}
+  .fade{opacity:0;transition:opacity .2s;}
+  .shield{display:flex;gap:10px;align-items:center;margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--mint-2);}
+  .shield b{font-size:13px;color:var(--green-ink);display:block;}
+  .shield span{font-size:12px;line-height:1.35;color:var(--muted);}
+
+  /* fair review */
+  .review{position:absolute;inset:0;z-index:5;background:rgba(15,25,22,.3);display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .4s;}
+  .review.open{opacity:1;pointer-events:auto;}
+  .rv{width:100%;background:#fff;border-radius:18px 18px 0 0;padding:8px 16px 14px;transform:translateY(100%);transition:transform .55s var(--ease);max-height:96%;overflow-y:auto;}
+  .review.open .rv{transform:none;}
+  .rv h3{font-size:18px;font-weight:800;}
+  .rv .sub2{font-size:12.5px;color:var(--muted);margin-top:2px;}
+  .rv-row{padding:10px 0;border-bottom:1px solid var(--line);}
+  .rv-row.last{border-bottom:0;}
+  .rv-head{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+  .rv-name{font-size:14.5px;font-weight:700;}
+  .rv-name small{font-weight:500;color:var(--muted);font-size:12px;}
+  .stars{display:flex;gap:2px;flex-shrink:0;}
+  .star{width:22px;height:22px;color:#D6DCDF;cursor:pointer;background:none;border:0;}
+  .star.lit{color:var(--green);}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:7px;}
+  .chip{font-size:11.5px;font-weight:600;background:var(--mint-2);color:var(--green-ink);padding:4px 9px;border-radius:999px;}
+  .rv-shield{margin-top:8px;font-size:12.5px;font-weight:700;color:var(--green-ink);}
+  .submit{margin-top:8px;width:100%;border:0;background:var(--green);color:#fff;font-size:15px;font-weight:700;padding:13px;border-radius:999px;cursor:pointer;}
+
+  /* ---------- dock ---------- */
+  .dock{padding-block:8px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);background:#fff;}
+  .scrub{display:grid;grid-template-columns:repeat(9,1fr);gap:4px;}
+  .sc{height:24px;border:0;background:transparent;cursor:pointer;display:flex;align-items:center;padding:0;}
+  .sc i{display:block;width:100%;height:4px;border-radius:9px;background:var(--line);transition:background .3s;}
+  .sc.hz i{background:#F7D3A8;}
+  .sc.done i{background:#9ADBB7;} .sc.on i{background:var(--dark);height:6px;}
+  .dock-row{display:flex;align-items:center;gap:8px;margin-top:4px;}
+  .toggle{display:flex;background:var(--map);border-radius:999px;padding:3px;flex-shrink:0;}
+  .toggle button{border:0;background:transparent;font-size:13px;font-weight:700;color:var(--muted);padding:9px 13px;border-radius:999px;cursor:pointer;transition:all .25s;}
+  .toggle button[aria-selected="true"]{background:var(--dark);color:#fff;}
+  .now{flex:1;min-width:0;font-size:12.5px;font-weight:700;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .now small{display:block;font-size:10.5px;color:var(--faint);font-weight:600;}
+  .ctl{width:40px;height:40px;border-radius:50%;border:1.5px solid var(--line);background:#fff;display:grid;place-items:center;cursor:pointer;flex-shrink:0;}
+  .ctl.play{background:var(--green);border-color:var(--green);color:#fff;width:44px;height:44px;}
+  .foot{display:none;}
+
+  @media (max-height:760px) and (max-width:919px){ .narr{min-height:0;font-size:13px;} .status{min-height:0;padding-top:9px;margin-top:8px;} .shield{margin-top:8px;padding:8px 10px;} .shield span{display:none;} .kept{margin-top:3px;} }
+
+  /* ---------- desktop: story left, framed device right ---------- */
+  @media (min-width:920px){
+    .app{display:grid;grid-template-columns:minmax(0,1fr) 392px;grid-template-rows:auto auto auto 1fr;column-gap:64px;max-width:1120px;margin:0 auto;padding-block:24px;min-height:100vh;align-content:center;}
+    .hero,.engine,.narr,.dock{grid-column:1;}
+    .map{max-height:none;}
+    .device{grid-column:2;grid-row:1 / span 5;margin:0;border:9px solid #15191B;border-radius:46px;height:min(760px,calc(100vh - 48px));min-height:620px;flex:none;min-height:0;box-shadow:0 30px 60px -36px rgba(16,32,28,.45);align-self:center;}
+    .eyebrow{font-size:13px;} .eyebrow .tag{font-size:12px;}
+    h1{margin-top:14px;}
+    .sub{display:block;font-size:17px;line-height:1.55;color:var(--muted);margin-top:14px;max-width:48ch;}
+    .engine{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;margin-top:22px;}
+    .tagline{display:none;}
+    .eng{flex-direction:row;align-items:center;gap:14px;padding:12px 16px;border-radius:14px;}
+    .eng .n{display:block;font-size:12px;width:16px;}
+    .eng b{font-size:15px;min-width:140px;}
+    .eng p{display:block;font-size:13.5px;color:var(--muted);line-height:1.4;}
+    .eng.on p{color:rgba(255,255,255,.9);}
+    .narr{display:block;font-size:16px;min-height:52px;padding-block:16px;}
+    .dock{border:1px solid var(--line);border-radius:18px;padding:10px 14px 12px;align-self:start;}
+    .foot{display:block;grid-column:1;font-size:12px;color:var(--faint);margin-top:14px;}
+  }
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="hero">
+    <div class="eyebrow"><span class="dot">STA</span>Safe Time of Arrival<span class="tag">Concept prototype</span></div>
+    <h1>The <em>Grab</em> Standard</h1>
+    <p class="tagline"><b>Rider Risk Score</b> reads the danger. <b>Safe Minutes</b> absorb it.</p>
+    <p class="sub">Follow one lunch order through a Klang Valley storm. The customer's time never moves. The rider's deadline bends, and his rating is protected.</p>
+  </header>
+
+  <div class="engine" aria-label="How STA works">
+    <div class="eng" id="e1"><span class="n">1</span><b>Reads the risk</b><p>Rider Risk Score measures the danger rain, traffic and kitchen jams put on the rider. It never grades how he rides.</p></div>
+    <div class="eng" id="e2"><span class="n">2</span><b>Adds Safe Minutes</b><p>Minutes go onto the rider's deadline, from a buffer already inside the customer's time.</p></div>
+    <div class="eng" id="e3"><span class="n">3</span><b>Shields the rider</b><p>Safe Minutes never count against his rating, record or incentives.</p></div>
+  </div>
+
+  <p class="narr" id="narr" aria-live="polite"></p>
+
+  <div class="device" id="device">
+    <div class="map" id="map">
+      <svg class="city" viewBox="0 -75 360 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <rect x="0" y="-75" width="360" height="420" fill="#E2E7E4"/>
+        <rect x="196" y="98" width="52" height="30" rx="6" fill="#D3EBDC"/><rect x="84" y="-50" width="64" height="40" rx="6" fill="#D3EBDC"/><rect x="280" y="230" width="60" height="50" rx="6" fill="#D3EBDC"/>
+        <g stroke="#FFFFFF" stroke-width="16" fill="none">
+          <path d="M60 -75V345"/><path d="M170 -75V345"/><path d="M264 -75V345"/><path d="M340 -75V345"/>
+          <path d="M0 -20H360"/><path d="M0 80H360"/><path d="M0 140H360"/><path d="M0 190H264"/><path d="M0 270H360"/>
+        </g>
+        <g stroke="#F4F6F5" stroke-width="7" fill="none"><path d="M115 140V345"/><path d="M0 30H170"/><path d="M220 190V345"/><path d="M264 230H360"/></g>
+        <path d="M60 190V140H170V80H300" fill="none" stroke="#B9C4C0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="2 8"/>
+        <path class="route-done" id="routeDone" d="M60 190V140H170V80H300" pathLength="350" fill="none" stroke="#00B14F" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="350" stroke-dashoffset="350"/>
+        <path class="jam" d="M196 80H262" stroke="#D93F3F" stroke-width="5" stroke-linecap="round"/>
+        <g transform="translate(60 190)">
+          <circle r="14" fill="#F08A24" stroke="#fff" stroke-width="2.5"/>
+          <path d="M-5.5 -7V-3.2Q-5.5 -1 -3.5 -1Q-1.5 -1 -1.5 -3.2V-7M-3.5 -7V-3M-3.5 -1V7" stroke="#fff" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4.6 7V-7C2.3 -5.8 1.7 -2.6 1.7 0.6H4.6" fill="#fff" stroke="#fff" stroke-width="1.3" stroke-linejoin="round" stroke-linecap="round"/>
+          <g class="busy" transform="translate(10 -18)"><rect x="-4" y="-9" width="44" height="18" rx="9" fill="#F08A24"/><text x="18" y="4" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" font-family="Inter,sans-serif">Busy</text></g>
+        </g>
+        <g transform="translate(300 80)"><circle r="13" fill="#00B14F"/><path d="M-6 2l6-6 6 6v6h-12z" fill="#fff"/></g>
+        <g class="rider-pin" id="riderPin" style="transform:translate(60px,190px);opacity:0">
+          <circle r="17" fill="#00B14F" opacity=".18"/>
+          <circle r="11" fill="#00B14F" stroke="#fff" stroke-width="2.5"/>
+          <circle cx="-3.5" cy="3" r="2.2" fill="none" stroke="#fff" stroke-width="1.4"/><circle cx="3.5" cy="3" r="2.2" fill="none" stroke="#fff" stroke-width="1.4"/>
+          <path d="M-3.5 3l2-4h3l2 4M-.5 -1l1-2.5" stroke="#fff" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        </g>
+      </svg>
+      <div class="weather" id="weather"></div>
+      <div class="rrs">
+        <div class="ring"><svg viewBox="0 0 38 38"><circle cx="19" cy="19" r="15" fill="none" stroke="#EDF0EE" stroke-width="4"/><circle id="rrsRing" cx="19" cy="19" r="15" fill="none" stroke="#00B14F" stroke-width="4" stroke-linecap="round" stroke-dasharray="94.25" stroke-dashoffset="94.25" style="transition:stroke-dashoffset .8s var(--ease),stroke .8s"/></svg><div class="rnum" id="rrsNum">0</div></div>
+        <div><div class="rt">Rider Risk Score</div><div class="rs" id="rrsState">All clear</div><div class="rth">Safe Minutes kick in at 60</div></div>
+      </div>
+      <div class="toast" id="toast"><div class="big" id="toastBig">+6 Safe Minutes</div><div class="why" id="toastWhy">Heavy rain · rating protected</div></div>
+    </div>
+
+    <div class="sheet">
+      <div class="grabber"></div>
+      <div class="vc">
+        <div class="eta-row"><div><div class="eta-l">Arriving Safely by</div><div class="eta">2:25 PM</div><div class="eta-s">Never moves</div></div><div class="sm"><div class="sm-n" id="smN">0<small>/21</small></div><div class="sm-l">Safe Minutes used</div></div></div>
+        <div class="buf"><div class="buf-bar"><div class="buf-fill" id="bufFill"></div></div></div>
+      </div>
+      <div class="vr">
+        <div class="eta-row"><div><div class="eta-l">Your drop-off target</div><div class="eta"><span id="rT">2:04 PM</span><s id="rWas"></s></div><div class="kept">Promise to customer: 2:25 PM, kept</div></div><div class="sm"><div class="sm-n" id="smR">+0</div><div class="sm-l">Safe Minutes for you</div></div></div>
+      </div>
+      <div class="prog" id="prog"><div class="seg"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div></div>
+      <div class="prog-l" id="progL"><span>Order</span><span>Kitchen</span><span>Road</span><span>Home</span></div>
+      <div class="status">
+        <div class="disc" id="stIcon"></div>
+        <div style="min-width:0">
+          <div class="st-top"><span class="st-l" id="stL"></span></div>
+          <p class="st-c" id="stC"></p>
+        </div>
+      </div>
+      <div class="vr">
+        <div class="shield">
+          <svg width="22" height="22" viewBox="0 0 32 32" style="flex-shrink:0"><path d="M16 4l10 4v7c0 6.5-4.3 11.2-10 13-5.7-1.8-10-6.5-10-13V8z" fill="#00B14F"/><path d="M11 16l3.5 3.5L21 13" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <div><b id="shT">Rating protected</b><span>Never counted against your rating, record or incentives.</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="review" id="review">
+      <div class="rv">
+        <div class="grabber"></div>
+        <h3>How was your order?</h3>
+        <div class="sub2">Arrived Safely at 2:17 PM, 8 min early</div>
+        <div class="rv-row"><div class="rv-head"><div class="rv-name">The promise <small>· the app</small></div><div class="stars" data-g="p"></div></div></div>
+        <div class="rv-row"><div class="rv-head"><div class="rv-name">The food <small>· the restaurant</small></div><div class="stars" data-g="f"></div></div></div>
+        <div class="rv-row last">
+          <div class="rv-head"><div class="rv-name">The ride <small>· your rider</small></div><div class="stars" data-g="j"></div></div>
+          <div class="chips"><span class="chip">Rode through heavy rain</span><span class="chip">Held at the junction</span><span class="chip">8 min early</span></div>
+          <div class="rv-shield">15 Safe Minutes not counted against your rider</div>
+        </div>
+        <button class="submit" id="submit">Submit review</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="dock" aria-label="Journey controls">
+    <div class="scrub" id="scrub"></div>
+    <div class="dock-row">
+      <div class="toggle" role="tablist" aria-label="Whose screen">
+        <button id="tabC" role="tab" aria-selected="true">Customer</button>
+        <button id="tabR" role="tab" aria-selected="false">Rider</button>
+      </div>
+      <div class="now" id="now"></div>
+      <button class="ctl" id="prev" aria-label="Previous step"><svg width="14" height="14" viewBox="0 0 14 14"><path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <button class="ctl play" id="play" aria-label="Pause"></button>
+    </div>
+  </nav>
+  <p class="foot">Concept prototype for a student awards entry. Not an official app or product.</p>
+</div>
+
+<script>
+  const $=id=>document.getElementById(id);
+  const Q=new URLSearchParams(location.search);
+  const NO_MOTION=window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const IC={
+    receipt:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00843B" stroke-width="2"><path d="M6 3h12v17l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5z" stroke-linejoin="round"/><path d="M9 8h6M9 12h6"/></svg>',
+    bike:'<svg width="24" height="22" viewBox="0 0 26 24" fill="none" stroke="#00843B" stroke-width="2"><circle cx="6" cy="16" r="4"/><circle cx="20" cy="16" r="4"/><path d="M6 16l4-8h6M13 8l4 8" stroke-linecap="round"/></svg>',
+    pot:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9A5500" stroke-width="2"><rect x="5" y="11" width="14" height="7" rx="2.5"/><path d="M3 11h18M9 7c0-1.2 1-1.2 1-2.4M14 7c0-1.2 1-1.2 1-2.4" stroke-linecap="round"/></svg>',
+    rain:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#9A5500" stroke-width="2"><path d="M7 14a4 4 0 0 1 .5-8A5.5 5.5 0 0 1 18 7.5 3.3 3.3 0 0 1 17.5 14z" stroke-linejoin="round"/><path d="M8 17l-1 3M12 17l-1 3M16 17l-1 3" stroke-linecap="round"/></svg>',
+    light:'<svg width="20" height="22" viewBox="0 0 22 24" fill="none" stroke="#9A5500" stroke-width="2"><rect x="7" y="2" width="8" height="15" rx="3"/><circle cx="11" cy="6" r="1.3" fill="#9A5500"/><circle cx="11" cy="10" r="1.3" fill="#9A5500"/><circle cx="11" cy="14" r="1.3" fill="#9A5500"/><path d="M11 17v5"/></svg>',
+    home:'<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#00843B" stroke-width="2"><path d="M4 20V10l8-6 8 6v10z" stroke-linejoin="round"/><path d="M10 20v-6h4v6"/></svg>',
+    star:'<svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 3l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.4l-5.2 2.7 1-5.8-4.3-4.1 5.9-.8z" fill="#00B14F"/></svg>'
+  };
+  const PLAY='<svg width="14" height="14" viewBox="0 0 14 14"><path d="M3 1.5l9 5.5-9 5.5z" fill="currentColor"/></svg>';
+  const PAUSE='<svg width="14" height="14" viewBox="0 0 14 14"><rect x="2.5" y="1.5" width="3.2" height="11" rx="1" fill="currentColor"/><rect x="8.3" y="1.5" width="3.2" height="11" rx="1" fill="currentColor"/></svg>';
+
+  // used = cumulative Safe Minutes from the 21-minute buffer (customer time fixed at 2:25; rider's first target 2:04)
+  // eng = which of the three engine steps light up
+  const S={
+    order:{step:'Order placed',pos:[60,190],show:0,prog:0,segs:1,used:0,rrs:[18,'All clear'],icon:'receipt',eng:[1,0,0],
+      l:'Order received',c:"The time above is set once, with room for the road. It won't move.",
+      rl:'New order',rc:'Pick-up 1.8 km away. Your target already has room for the road.',
+      n:'The arrival time is set once, with room for the road built in. <b>It never moves.</b>'},
+    accepted:{step:'Rider assigned',pos:[20,140],show:1,prog:0,segs:1,used:0,rrs:[20,'All clear'],icon:'bike',eng:[1,0,0],
+      l:'Rider assigned',c:'Heading to the restaurant now.',
+      rl:'Heading to the restaurant',rc:'Pick-up 1.8 km away. No need to rush it.',
+      n:'<b>Rider Risk Score</b> is live. It measures the danger around the rider, never how he rides.'},
+    cooking:{step:'Cooking',pos:[60,190],show:1,prog:0,segs:2,used:0,rrs:[22,'All clear'],icon:'pot',eng:[1,0,0],
+      l:'Being prepared',c:'Cooking takes the time it takes.',
+      rl:'Waiting at the restaurant',rc:'Cooking time sits with the kitchen, not with you.',
+      n:'Kitchen time sits on the clock. Nobody has to win it back on the road.'},
+    busy:{step:'Kitchen busy',hz:1,pos:[60,190],show:1,prog:0,segs:2,used:5,rrs:[64,'Kitchen packed'],icon:'pot',map:'busy-k',eng:[1,1,1],delta:5,why:'Kitchen packed · not the rider\'s fault',
+      l:'Restaurant is busy',c:"The kitchen is at full capacity. Good food doesn't get rushed.",
+      rl:'Kitchen delay',rc:'The wait is logged to the restaurant, not to you.',
+      n:'Kitchen jam · risk <b>64</b> · <b>+5 Safe Minutes</b>, logged to the restaurant, not the rider.'},
+    road:{step:'On the road',pos:[110,140],show:1,prog:100,segs:3,used:5,rrs:[30,'Open road'],icon:'bike',eng:[1,0,0],
+      l:'On the way',c:'Clear road. On the way to you.',
+      rl:'On the road',rc:'Clear road. 3.4 km to drop-off.',
+      n:'Clear road, risk <b>30</b>. Nothing to absorb, so the screen stays quiet.'},
+    rain:{step:'Heavy rain',hz:1,pos:[170,112],show:1,prog:188,segs:3,used:11,rrs:[88,'Heavy rain'],icon:'rain',map:'rain',eng:[1,1,1],delta:6,why:'Heavy rain · rating protected',
+      l:'Riding through rain',c:'Heavy rain on the route. Slowing down so nothing else goes wrong.',
+      rl:'Heavy rain on route',rc:"Ride the rain. Don't race it.",
+      n:'Heavy rain · risk <b>88</b> · <b>+6 Safe Minutes</b>. The customer\'s time holds. The rider\'s deadline bends.'},
+    jam:{step:'Congestion',hz:1,pos:[196,80],show:1,prog:246,segs:3,used:15,rrs:[79,'Congestion'],icon:'light',map:'traffic',eng:[1,1,1],delta:4,why:'Congestion · rating protected',
+      l:'Slow traffic ahead',c:'Taking the safe line through the junction.',
+      rl:'Congestion ahead',rc:'Take the safe line through.',
+      n:'Congestion · risk <b>79</b> · <b>+4 Safe Minutes</b>. Still inside the 2:25 promise.'},
+    arrived:{step:'Arrived Safely',pos:[300,80],show:1,prog:350,segs:4,used:15,rrs:[14,'Arrived'],icon:'home',eng:[0,0,1],
+      l:'Arrived Safely',c:'Delivered at 2:17 PM, 8 minutes early.',
+      rl:'Arrived Safely',rc:'Delivered at 2:17 PM. 15 Safe Minutes, none against you.',
+      n:'Arrived Safely, <b>8 minutes early</b>. 15 Safe Minutes used. <b>0</b> counted against the rider.'},
+    review:{step:'Fair review',pos:[300,80],show:1,prog:350,segs:4,used:15,rrs:[14,'Arrived'],icon:'star',eng:[0,0,1],sheet:1,
+      l:'Arrived Safely',c:'Delivered at 2:17 PM, 8 minutes early.',
+      rl:'Rated fairly',rc:'Rated on the ride you controlled. The rain is on the record, not on you.',
+      n:'Three separate ratings: app, restaurant, rider. <b>The rider is rated only on what he controlled.</b>'}
+  };
+  const ORDER=Object.keys(S), BUF=21, BASE=4;
+  const t=m=>`2:${String(m).padStart(2,'0')} PM`;
+
+  // scrubber
+  const scBtns=ORDER.map((k,i)=>{
+    const b=document.createElement('button'); b.className='sc'+(S[k].hz?' hz':''); b.setAttribute('aria-label',S[k].step); b.innerHTML='<i></i>';
+    b.onclick=()=>{stopAuto();idx=i;go(i);}; $('scrub').appendChild(b); return b;
+  });
+  for(let i=0;i<40;i++){const d=document.createElement('div');d.className='drop';d.style.left=Math.random()*100+'%';d.style.height=(8+Math.random()*8)+'px';d.style.animationDuration=(.55+Math.random()*.6)+'s';d.style.animationDelay=(Math.random()*1.2)+'s';$('weather').appendChild(d);}
+
+  let view='c', cur=0, idx=0;
+  function setView(v){
+    view=v; $('device').classList.toggle('rider',v==='r');
+    $('tabC').setAttribute('aria-selected',v==='c'); $('tabR').setAttribute('aria-selected',v==='r');
+    const s=S[ORDER[cur]]; paintText(s); $('review').classList.toggle('open',!!s.sheet&&v==='c');
+  }
+  $('tabC').onclick=()=>{stopAuto();setView('c');};
+  $('tabR').onclick=()=>{stopAuto();setView('r');};
+  $('prev').onclick=()=>{stopAuto();idx=(cur+ORDER.length-1)%ORDER.length;go(idx);};
+  $('play').onclick=()=>{ if(timer){stopAuto();} else { idx=(cur===ORDER.length-1)?0:cur+1; startAuto(); } };
+
+  const rrsColor=v=>v>=80?'#D93F3F':v>=60?'#F08A24':'#00B14F';
+  function paintText(s){ const r=view==='r'; $('stL').textContent=r?s.rl:s.l; $('stC').textContent=r?s.rc:s.c; }
+
+  let toastT=null;
+  function go(i){
+    const k=ORDER[i], s=S[k]; cur=i;
+    scBtns.forEach((b,j)=>{b.classList.toggle('on',j===i);b.classList.toggle('done',j<i);});
+    $('now').innerHTML=`${s.step}<small>Step ${i+1} of ${ORDER.length}</small>`;
+    $('map').className='map'+(s.map?' '+s.map:'');
+    const pin=$('riderPin'); pin.style.opacity=s.show?1:0; pin.style.transform=`translate(${s.pos[0]}px,${s.pos[1]}px)`;
+    $('routeDone').style.strokeDashoffset=350-s.prog;
+    [...$('prog').children].forEach((g,j)=>g.classList.toggle('on',j<s.segs));
+    [...$('progL').children].forEach((g,j)=>g.classList.toggle('on',j<s.segs));
+    $('rrsRing').style.strokeDashoffset=94.25*(1-s.rrs[0]/100); $('rrsRing').style.stroke=rrsColor(s.rrs[0]); const rc=document.querySelector('.rrs'); rc.style.setProperty('--hot',rrsColor(s.rrs[0])); rc.classList.toggle('hot',s.rrs[0]>=60);
+    $('rrsNum').textContent=s.rrs[0]; $('rrsState').textContent=s.rrs[1];
+    $('bufFill').style.width=(s.used/BUF*100)+'%';
+    $('smN').innerHTML=`${s.used}<small>/${BUF}</small>`; $('smR').textContent=`+${s.used}`;
+    if(s.delta&&!NO_MOTION){['smN','smR'].forEach(id=>{const e=$(id);e.classList.remove('pop');void e.offsetWidth;setTimeout(()=>e.classList.add('pop'),650);});}
+    $('rT').textContent=t(BASE+s.used); $('rWas').textContent=s.delta?t(BASE+s.used-s.delta):'';
+    $('shT').textContent=s.used?`${s.used} Safe Minutes · rating protected`:'Rating protected';
+    s.eng.forEach((on,j)=>{const e=$('e'+(j+1)); const was=e.classList.contains('on'); e.classList.toggle('on',!!on);
+      if(on&&!was&&!NO_MOTION){e.classList.remove('pulse');void e.offsetWidth;e.classList.add('pulse');}});
+    const els=[$('stL'),$('stC'),$('stIcon')]; els.forEach(e=>e.classList.add('fade'));
+    setTimeout(()=>{paintText(s);$('stIcon').innerHTML=IC[s.icon];$('stIcon').style.background=s.delta?'var(--amber-bg)':'var(--mint)';els.forEach(e=>e.classList.remove('fade'));},200);
+    clearTimeout(toastT); $('toast').classList.remove('show');
+    if(s.delta){ $('toastBig').textContent=`+${s.delta} Safe Minutes`; $('toastWhy').textContent=s.why;
+      toastT=setTimeout(()=>{$('toast').classList.add('show'); toastT=setTimeout(()=>$('toast').classList.remove('show'),2600);},NO_MOTION?0:650); }
+    $('review').classList.toggle('open',!!s.sheet&&view==='c');
+    const n=$('narr'); n.style.opacity=0; setTimeout(()=>{n.innerHTML=s.n;n.style.opacity=1;},160);
+  }
+
+  const STAR='<svg viewBox="0 0 24 24" width="20" height="20"><path d="M12 2.5l2.9 6.2 6.6.8-4.9 4.6 1.3 6.6L12 17.4l-5.9 3.3 1.3-6.6-4.9-4.6 6.6-.8z" fill="currentColor"/></svg>';
+  document.querySelectorAll('.stars').forEach(g=>{for(let i=1;i<=5;i++){const b=document.createElement('button');b.className='star';b.setAttribute('aria-label',i+' star');b.innerHTML=STAR;b.onclick=()=>[...g.children].forEach((c,j)=>c.classList.toggle('lit',j<i));g.appendChild(b);}});
+  function presetStars(){document.querySelectorAll('.stars').forEach(g=>{const n=g.dataset.g==='f'?4:5;[...g.children].forEach((c,j)=>c.classList.toggle('lit',j<n));});}
+  $('submit').onclick=function(){this.textContent='Review sent';setTimeout(()=>this.textContent='Submit review',1600);};
+
+  // autoplay; in the rain it flips to the rider's screen by itself
+  let timer=null, flips=[];
+  const DWELL={order:2800,accepted:2600,cooking:2600,busy:4200,road:2800,rain:8600,jam:4200,arrived:3400,review:5600};
+  function startAuto(){
+    stopAuto(); $('play').innerHTML=PAUSE; $('play').setAttribute('aria-label','Pause');
+    const step=()=>{
+      const k=ORDER[idx%ORDER.length]; setView('c'); go(idx%ORDER.length);
+      if(k==='rain'){flips.push(setTimeout(()=>setView('r'),3600));flips.push(setTimeout(()=>setView('c'),7600));}
+      if(k==='review') flips.push(setTimeout(presetStars,800));
+      timer=setTimeout(()=>{idx=(idx+1)%ORDER.length;step();},DWELL[k]);
+    };
+    step();
+  }
+  function stopAuto(){clearTimeout(timer);timer=null;flips.forEach(clearTimeout);flips=[];$('play').innerHTML=PLAY;$('play').setAttribute('aria-label','Play');}
+
+  if(Q.has('manual')) go(0); else startAuto();
+</script>
+</body>
+</html>
